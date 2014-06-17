@@ -1,0 +1,10 @@
+requires 'Mojolicious';
+requires 'Moose';
+requires 'Carp';
+requires 'Try::Tiny';
+requires 'Data::Dumper';
+requires 'JSON';
+requires 'DBIx::Class';
+requires 'DBI';
+requires 'DBD::Pg';
+requires 'DBIx::Class::Schema::Loader';
