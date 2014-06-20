@@ -67,9 +67,8 @@ __PACKAGE__->table("reports");
 
 =head2 report_fields_json
 
-  data_type: 'varchar'
+  data_type: 'text'
   is_nullable: 1
-  size: 1000
 
 =cut
 
@@ -99,7 +98,7 @@ __PACKAGE__->add_columns(
   "completed_on",
   { data_type => "timestamp", is_nullable => 1 },
   "report_fields_json",
-  { data_type => "varchar", is_nullable => 1, size => 1000 },
+  { data_type => "text", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
@@ -115,9 +114,9 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key("name");
 
 
-# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-06-18 13:55:46
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:CfgfBO25pieFJYfo1vycnQ
-
+# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-06-19 23:08:04
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:a5KyNVHkK86wxXdL9oC1xg
+__PACKAGE__->resultset_class( 'DBIx::Class::ResultSet::HashRef' );
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;
