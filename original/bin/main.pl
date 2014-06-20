@@ -33,11 +33,13 @@ get '/' => sub {
 get '/my_reports' => sub {
   my $self = shift;
   
-    my $reports;
+    my $reports = $self->db->resultset('Report')->search(undef, {order_by => 'submitted_on'})->hashref_pk;
 
   # ordered list of columns for display
   my @reports_head = qw(
     name
+    submitted_on
+    completed_on
     status
     start
     end
@@ -62,9 +64,14 @@ get '/my_reports' => sub {
 get '/view_report/:id' => sub {
   my $self = shift;
   
-  my $id = $self->param('id');
-  my $report; #$report->hash_for_web
-  $self->stash( report => $report);
+  my $name = $self->param('id');
+  my $report = Poo::Report->new(db => $self->db, name => $name);
+  my $report_array = $report->report_fields;
+  
+  $self->stash(
+    report => $report_array,
+    report_name => $name,
+  );
 
   $self->render('view_report');
 };
@@ -78,17 +85,27 @@ post '/post_report_request' => sub {
   my $self = shift;
   my $params = dclone($self->req->body_params->to_hash);
   my $report_builder = Poo::ReportBuilder->new();
-  my $report = $report_builder->build_report($params);
+  my $report_data = $report_builder->build_report($params);
+  
+  #my $report_data_copy = dclone($report_data);
+  #for my $row (@{$report_data_copy}) {
+  #  delete $row->{image};
+  #}
+  my $report_json = encode_json($report_data);
   
   my %args = (
+    db => $self->db,
     create => 1,
+    report_fields_json => $report_json,
+    %{$params},
   );
 
   # create a new report instance with the results
-  #my $report = Poo::Report->new(%args);
+  my $report = Poo::Report->new(\%args);
+  $report->save;
   
   $self->stash(
-               report => $report,
+               report => $report_data,
                report_name => $params->{name}
                );
   $self->render( 'view_report' );

@@ -8,3 +8,6 @@ requires 'DBIx::Class';
 requires 'DBI';
 requires 'DBD::Pg';
 requires 'DBIx::Class::Schema::Loader';
+requires 'DBIx::Class::ResultSet::HashRef';
+requires 'AnyEvent::HTTP';
+requires 'AnyEvent::RabbitMQ';
