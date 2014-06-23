@@ -1,12 +1,15 @@
 #!/usr/bin/env perl
 use Mojolicious::Lite;
 
+use lib '../../local/lib/perl5';
 use Try::Tiny;
 use Data::Dumper;
 use Carp qw(croak);
 use Storable qw(dclone);
 use JSON;
 use MIME::Base64;
+use AnyEvent::RabbitMQ;
+use DateTime;
 
 use lib '../lib';
 use Poo::Util;
@@ -33,7 +36,7 @@ get '/' => sub {
 get '/my_reports' => sub {
   my $self = shift;
   
-    my $reports = $self->db->resultset('Report')->search(undef, {order_by => 'submitted_on'})->hashref_pk;
+  my $reports = $self->db->resultset('Report')->search(undef, {order_by => 'submitted_on'})->hashref_pk;
 
   # ordered list of columns for display
   my @reports_head = qw(
@@ -41,8 +44,8 @@ get '/my_reports' => sub {
     submitted_on
     completed_on
     status
-    start
-    end
+    start_date
+    end_date
   );
 
   $self->stash(reports_head => \@reports_head);
@@ -69,6 +72,7 @@ get '/view_report/:id' => sub {
   my $report_array = $report->report_fields;
   
   $self->stash(
+    report_head => "",
     report => $report_array,
     report_name => $name,
   );
@@ -84,29 +88,94 @@ get '/report_request' => sub {
 post '/post_report_request' => sub {
   my $self = shift;
   my $params = dclone($self->req->body_params->to_hash);
-  my $report_builder = Poo::ReportBuilder->new();
-  my $report_data = $report_builder->build_report($params);
-  
-  #my $report_data_copy = dclone($report_data);
-  #for my $row (@{$report_data_copy}) {
-  #  delete $row->{image};
-  #}
-  my $report_json = encode_json($report_data);
   
   my %args = (
     db => $self->db,
     create => 1,
-    report_fields_json => $report_json,
-    %{$params},
+    %{$params}
+  );
+  
+  # create a new report entry
+  say Dumper($params);
+  my $report = Poo::Report->new(\%args)->save();
+  
+  # push a job to the queue
+  my $cv = AnyEvent->condvar;
+
+  my $ar = AnyEvent::RabbitMQ->new->load_xml_spec()->connect(
+    host       => 'localhost',
+    port       => 5672,
+    user       => 'guest',
+    pass       => 'guest',
+    vhost      => '/',
+    on_success => sub {
+
+      my $ar = shift;
+
+      $ar->open_channel(
+        on_success => sub {
+
+          my $channel = shift;
+  
+          $channel->declare_queue(
+              queue => 'reports',
+              auto_delete => 0,
+          );
+  
+          # if reply-to, include in args
+          my %publish_args = (
+              header => {
+                  content_type    => 'application/json',
+                  headers         => { format  => "t1-v1" },
+              },
+              body => encode_json($params),
+              routing_key => 'reports',
+          );
+
+          my $now = DateTime->now;
+
+          $channel->publish(%publish_args);
+          my $queued_report = Poo::Report->new(db => $self->db, name => $params->{name}, status => 'queued')->save();
+
+        # exit once processing is done
+        $cv->send("Added report request to queue");
+        },
+        on_failure => sub { $cv->croak("Channel failure: " . Dumper(@_)) },
+        on_close   => sub { $cv->croak("Channel closed: " . Dumper(@_)) }
+      );
+    },
+    on_failure => sub {die "Connection Failure: " . Dumper(@_)},
+    on_read_failure => sub {die "Connection Read Failure: " . Dumper(@_)},
+    on_return  => sub {
+        my $frame = shift;
+        die "Unable to deliver ", Dumper($frame);
+    },
+    on_close   => sub {
+        my $method_frame = shift->method_frame;
+        die $method_frame->reply_code, $method_frame->reply_text;
+    },
+
   );
 
-  # create a new report instance with the results
-  my $report = Poo::Report->new(\%args)->save;
+  say $cv->recv;
+  
+  my $report_for_display = Poo::Report->new(db => $self->db, name => $params->{name});
+  my $report_data = $report->report_fields;
+  my $report_head = "";
+  
+  if ($report_for_display->status ne 'complete') {
+    $report_head = 'Report Request Submitted';
+  }
+  
+  $report_data->{start_date} = $report->start_date;
+  $report_data->{end_date} = $report->end_date;
+  
   
   $self->stash(
-               report => $report_data,
-               report_name => $params->{name}
-               );
+                report_head => $report_head,
+                report => $report_data,
+                report_name => $params->{name}
+              );
   $self->render( 'view_report' );
 };
 
@@ -153,6 +222,7 @@ My Reports: <br />
 % layout 'default';
 % title 'My Report';
 <%=$report_name%> <br />
+<b><%=$report_head%></b><br />
 <br />
 <table border=1>
 % for my $col (keys %{$report->[0]}){

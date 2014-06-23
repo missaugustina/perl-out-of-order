@@ -11,3 +11,4 @@ requires 'DBIx::Class::Schema::Loader';
 requires 'DBIx::Class::ResultSet::HashRef';
 requires 'AnyEvent::HTTP';
 requires 'AnyEvent::RabbitMQ';
+requires 'DateTime';
