@@ -28,7 +28,9 @@ The test data is provided from the samples on the PG Foundry website: http://pgf
 If you don't want to use Postgres, you can change the "dsn" string (just grep the repo). Follow the setup instructions for Postgres but adapt it for your database server of choice as appropriate. Normally I use a config file to load this seperately but for this demo, a hard-coded dsn string was acceptable.
 
 ### Rabbitmq
-TODO
+I installed rabbitmq-server through apt-get. I also recommend enabling the RabbitMQ administration plugin that lets you manage RMQ through a web browser.
+
+The application just uses the default guest/guest configuration.
 
 ## Running the Applications
 TODO
