@@ -50,18 +50,19 @@ my $ar = AnyEvent::RabbitMQ->new->load_xml_spec()->connect(
 
                         # decode queue item content
                         my $params = decode_json($message->{body}->payload);
-                        say "Report Worker Job Item Received " . Dumper($params);
                         
                         my $report_builder = Poo::ReportBuilder->new();
                         say "building report";
                         $report_builder->build_report($params, sub {
-                          my $report_data = shift; # because we passed result via cb, we get the result, not cv.
+                          # because we passed the result via callback,
+                          #  we get the result, not condvar
+                          my $report_data = shift;
                           say "built report";
                         
                           my $report_json = encode_json($report_data);
                           
                           my %args = (
-                            db => $db,
+                            db => $db, # this is blocking
                             report_fields_json => $report_json,
                             %{$params},
                           );
@@ -77,15 +78,15 @@ my $ar = AnyEvent::RabbitMQ->new->load_xml_spec()->connect(
                 );
 
             },
-            on_failure => sub { $cv->croak("CES Worker Channel failure: " . Dumper(@_)) },
-            on_close   => sub { $cv->croak("CES Worker Channel closed: " . Dumper(@_)) }
+            on_failure => sub { $cv->croak("Report Worker Channel failure: " . Dumper(@_)) },
+            on_close   => sub { $cv->croak("Report Worker Channel closed: " . Dumper(@_)) }
         );
     },
-    on_failure => sub {die "CES Worker Connection Failure: " . Dumper(@_)},
-    on_read_failure => sub {die "CES Worker Connection Read Failure: " . Dumper(@_)},
+    on_failure => sub {die "Report Worker Connection Failure: " . Dumper(@_)},
+    on_read_failure => sub {die "Report Worker Connection Read Failure: " . Dumper(@_)},
     on_return  => sub {
         my $frame = shift;
-        die "CES Worker Unable to deliver ", Dumper($frame);
+        die "Report Worker Unable to deliver ", Dumper($frame);
     },
     on_close   => sub {
         my $method_frame = shift->method_frame;

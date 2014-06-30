@@ -73,7 +73,7 @@ sub build_report {
   my $report = [];
   my %pre_report;
   my %urls_list;
-say "get data from db";
+
   my $db_data = $self->_get_data_from_db($args);
   
   for my $row (@{$db_data}) {
@@ -103,11 +103,7 @@ say "get data from db";
     
     $pre_report{$row->{customerid}} = $report_row;
   }
-  
-  # all the stuff that needs http_data goes into the callback
-  # instead of get_data_from_urls returning http_data
-  # it's returned from the callback, so we pass it into this callback as an argument
-  # cv->recv because a) cv is passed as the only arg and b) cv->recv is not blocking because this is guaranteed to have completed
+
   $self->_get_data_from_urls(\%urls_list, sub {
     say "getting data from urls";
     my $http_data = shift->recv;
@@ -128,8 +124,8 @@ say "get data from db";
       
       push @{$report}, $pre_report_row;
     }
-    say "return report via cb";
-    $cb->($report); # pass to the calling callback, returns immediatly
+
+    $cb->($report);
   });
 
   return;
@@ -171,32 +167,21 @@ sub _get_data_from_urls {
   my $self = shift;
   my $urls = shift;
   my $cb = shift;
-  
-  # initialize the condition variable
-  # a potential value that may or may not be available
-  # does not have a value until its "ready" meaning the request has completed
-  # recv, wait until this value is available
+
   my $cv = AnyEvent->condvar;
   
   my $result;
   my $start = time;
-   
-  # call send after results have been gathered
-  # and event counter is 0
-  $cv->begin(sub { shift->send($result) }); # last one specified wins
+
+  $cv->begin(sub { shift->send($result) });
 
   while (my ($customerid, $urls) = (each %{$urls})) {
     for my $service_name (keys %{$urls}) {
-      $cv->begin; # start the request (increment event counter)
+      $cv->begin;
   
       my $now = time;
       my $request;
-      
-      # calling "http_request" means, declare you want the request to be made when possible
-      # when the request finishes, do (call/invoke) the callback
-      # doesn't actually do anything, returns right away, telling the loop to do the request
-      # event loop is not currently running because this chunk of code has control
-      # either start event loop or return back to the event loop
+
       $request = http_request(
         GET => $urls->{$service_name},
         timeout => 2, # seconds
@@ -214,33 +199,20 @@ sub _get_data_from_urls {
           #say "time to fetch $service_name url: " . time - $now;
           
           undef $request;
-          $cv->end; # finish request (decrement event counter), calls end at a different point in time
+          $cv->end;
         }
       );
     }
   }
   
-  #my $cv = AE::cv;
-  #http_request(..., sub { $cv->send(42); })
-  #my $ret = $cv->recv;
-  #
-  ## register my interest in this event
-  #my @cvs;
-  #for my $url (@urls) {
-  #  my $cv = AE::cv;
-  #  http_request(..., sub { $cv->send(42) });
-  #  push @cvs, $cv;
-  #}
-  #my @results = map { $_->recv } @cvs;
+  $cv->end;
   
-  $cv->end; # always called, so cv gets "activated" even if 0 urls in the data structure, guarantees end will be called
-  
-  $cv->cb($cb); # whenver it completes and something is sent to the cv, when cv is ready, cb function of the cv to call a function as soon as it completes, as soon as SEND
+  $cv->cb($cb);
 }
 
 # normally this would take the additional url args
 #  and make a url with data for the get request
-#  but for purposes of this demo, we aren't going to do that.
+#  but for purposes of this example, we aren't going to do that.
 sub _url_with_args {
   my $self = shift;
   my ($url, $args) = (@_);

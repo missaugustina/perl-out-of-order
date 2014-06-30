@@ -156,32 +156,28 @@ sub _get_data_from_db {
 sub _get_data_from_urls {
   my $self = shift;
   my $urls = shift;
-  
-  # initialize the condition variable
-  # a potential value that may or may not be available
-  # does not have a value until its "ready" meaning the request has completed
-  # recv, wait until this value is available
+
+  # NOTE: never handle cv within a library call
+  #   see the worker-queue example for how to do this correctly.
+  #   This is here for you to play with, try using the RabbitMQ code
+  #   or creating another AnyEvent call in main.pl, call "build_report"
+  #   and see what happens!
+  # This will help you to understand why we need callbacks.
+
   my $cv = AnyEvent->condvar();
   
   my $result;
   my $start = time;
-   
-  # call send after results have been gathered
-  # and event counter is 0
-  $cv->begin(sub { shift->send($result) }); # last one specified wins
+
+  $cv->begin(sub { shift->send($result) });
 
   while (my ($customerid, $urls) = (each %{$urls})) {
     for my $service_name (keys %{$urls}) {
-      $cv->begin; # start the request (increment event counter)
+      $cv->begin;
   
       my $now = time;
       my $request;
-      
-      # calling "http_request" means, declare you want the request to be made when possible
-      # when the request finishes, do (call/invoke) the callback
-      # doesn't actually do anything, returns right away, telling the loop to do the request
-      # event loop is not currently running because this chunk of code has control
-      # either start event loop or return back to the event loop
+
       $request = http_request(
         GET => $urls->{$service_name},
         timeout => 2, # seconds
@@ -199,32 +195,14 @@ sub _get_data_from_urls {
           #say "time to fetch $service_name url: " . time - $now;
           
           undef $request;
-          $cv->end; # finish request (decrement event counter), calls end at a different point in time
+          $cv->end;
         }
       );
     }
   }
   
-  
-  #my $cv = AE::cv;
-  #http_request(..., sub { $cv->send(42); })
-  #my $ret = $cv->recv;
-  #
-  ## register my interest in this event
-  #my @cvs;
-  #for my $url (@urls) {
-  #  my $cv = AE::cv;
-  #  http_request(..., sub { $cv->send(42) });
-  #  push @cvs, $cv;
-  #}
-  #my @results = map { $_->recv } @cvs;
-  
-  $cv->end; # always called, so cv gets "activated" even if 0 urls in the data structure, guarantees end will be called
-  # if the first one takes 5 milsec and rest take 1. this takes 5 milsec
-  # this is a list of cv's, all of the requests happen at the same time
-  # same as begin/end more or less
-  
-  # run the event loop until this convar becomes ready
+  $cv->end;
+
   my $http_result = $cv->recv;
   return $http_result;
 }

@@ -96,10 +96,9 @@ post '/post_report_request' => sub {
   );
   
   # create a new report entry
-  say Dumper($params);
   my $report = Poo::Report->new(\%args)->save();
   
-  # push a job to the queue
+  # push a job to the RabbitMQ queue
   my $cv = AnyEvent->condvar;
 
   my $ar = AnyEvent::RabbitMQ->new->load_xml_spec()->connect(
@@ -126,7 +125,6 @@ post '/post_report_request' => sub {
           my %publish_args = (
               header => {
                   content_type    => 'application/json',
-                  headers         => { format  => "t1-v1" },
               },
               body => encode_json($params),
               routing_key => 'reports',
