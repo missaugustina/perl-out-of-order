@@ -7,6 +7,7 @@ use Carp qw(croak);
 use Storable qw(dclone);
 use JSON;
 use MIME::Base64;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 use lib '../lib';
 use Poo::Util;
@@ -83,14 +84,12 @@ get '/report_request' => sub {
 
 post '/post_report_request' => sub {
   my $self = shift;
+  
+  my $start = [gettimeofday];
   my $params = dclone($self->req->body_params->to_hash);
   my $report_builder = Poo::ReportBuilder->new();
   my $report_data = $report_builder->build_report($params);
-  
-  #my $report_data_copy = dclone($report_data);
-  #for my $row (@{$report_data_copy}) {
-  #  delete $row->{image};
-  #}
+
   my $report_json = encode_json($report_data);
   
   my %args = (
@@ -103,6 +102,8 @@ post '/post_report_request' => sub {
   # create a new report instance with the results
   my $report = Poo::Report->new(\%args)->save;
   
+  say "report took: " . tv_interval($start, [gettimeofday]);
+
   $self->stash(
                report => $report_data,
                report_name => $params->{name}

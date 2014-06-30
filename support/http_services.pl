@@ -19,6 +19,13 @@ helper db => sub {
 
 get '/image' => sub {
   my $self = shift;
+  
+  # randomly wait 1 second before continuing
+  my $wait = int(rand(100));
+  if ($wait%10 == 0) {
+    sleep 1;
+  }
+
   my $id = int(rand(25));
   
   my $db_row = $self->db->resultset('Image')->search(
@@ -33,6 +40,12 @@ get '/image' => sub {
 get '/weather' => sub {
   my $self = shift;
   
+  # randomly wait 5 seconds before continuing
+  my $wait = int(rand(100));
+  if ($wait%10 == 0) {
+    sleep 5;
+  }
+ 
   my %weather;
   
   # select a random number between 0-40

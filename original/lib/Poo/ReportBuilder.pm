@@ -13,6 +13,7 @@ use Try::Tiny;
 use JSON;
 use LWP;
 use DBI;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 # db handle
 has dbh => (
@@ -155,6 +156,9 @@ sub _get_data_from_urls {
   my $http_data;
   
   while (my ($service_name, $url) = (each %{$self->urls})) {
+    # obviously this should have better error handling
+    #  for our purposes however, it doesn't.
+    my $start = [gettimeofday];
     my $req = HTTP::Request->new(GET => $url);
     my $res = $self->_user_agent->request($req);
     my $content = $res->content;
@@ -166,6 +170,7 @@ sub _get_data_from_urls {
     }
     
     $http_data->{$service_name} = $content;
+    say "url request for $service_name took " . tv_interval($start, [gettimeofday]);
   }
   
   return $http_data;

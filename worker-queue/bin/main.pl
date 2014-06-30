@@ -9,7 +9,7 @@ use Storable qw(dclone);
 use JSON;
 use MIME::Base64;
 use AnyEvent::RabbitMQ;
-use DateTime;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 use lib '../lib';
 use Poo::Util;
@@ -96,8 +96,11 @@ post '/post_report_request' => sub {
   );
   
   # create a new report entry
-  my $report = Poo::Report->new(\%args)->save();
+  my $report = Poo::Report->new(\%args);
+  $report->save();
   
+  my $start = [gettimeofday];
+
   # push a job to the RabbitMQ queue
   my $cv = AnyEvent->condvar;
 
@@ -133,7 +136,8 @@ post '/post_report_request' => sub {
           my $now = DateTime->now;
 
           $channel->publish(%publish_args);
-          my $queued_report = Poo::Report->new(db => $self->db, name => $params->{name}, status => 'queued')->save();
+          my $queued_report = Poo::Report->new(db => $self->db, name => $params->{name}, status => 'queued');
+          $queued_report->save();
 
         # exit once processing is done
         $cv->send("Added report request to queue");
@@ -158,21 +162,19 @@ post '/post_report_request' => sub {
   say $cv->recv;
   
   my $report_for_display = Poo::Report->new(db => $self->db, name => $params->{name});
-  my $report_data = $report->report_fields;
+  my $report_data = $report_for_display->report_fields;
   my $report_head = "";
   
   if ($report_for_display->status ne 'complete') {
     $report_head = 'Report Request Submitted';
   }
-  
-  $report_data->{start_date} = $report->start_date;
-  $report_data->{end_date} = $report->end_date;
-  
+
+  say "request took: " . tv_interval($start,[gettimeofday]);
   
   $self->stash(
                 report_head => $report_head,
                 report => $report_data,
-                report_name => $params->{name}
+                report_name => $params->{name},
               );
   $self->render( 'view_report' );
 };
@@ -246,7 +248,6 @@ My Reports: <br />
 %= t h1 => 'New Report'
 <table border=1>
 %= form_for '/post_report_request' => (method => 'post') => begin
-%= hidden_field request_id => $self->param('id');
 <tr><td>Start Date: </td><td><%= text_field 'start_date' %></td></tr>
 <tr><td>End Date: </td><td><%= text_field 'end_date' %></td></tr>
 <tr><td>Name (optional): </td><td><%= text_field 'name' %></td></tr>

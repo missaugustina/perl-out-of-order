@@ -280,7 +280,13 @@ sub _update {
       unless $self->unmodified_fields->{$field};
   }
 
-  $self->db->resultset('Report')->update(\%modified_fields);
+  my $rs = $self->db->resultset('Report')->search(
+    {
+      'me.name' => $self->name
+    }
+  );
+  
+  $rs->update(\%modified_fields);
 
   return;
 }
@@ -289,7 +295,7 @@ sub _insert {
   my $self = shift;
 
   my $db_row;
-  say "Unmodified: " . Dumper($self->unmodified_fields);
+
   my %modified_fields;
   for my $field (@{$self->db_fields}) {
     $modified_fields{$field} = $self->$field

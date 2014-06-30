@@ -6,6 +6,7 @@ use Data::Dumper;
 use Carp qw(croak);
 use JSON;
 use AnyEvent::RabbitMQ;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 use lib '../lib';
 use Poo::Report;
@@ -52,23 +53,29 @@ my $ar = AnyEvent::RabbitMQ->new->load_xml_spec()->connect(
                         my $params = decode_json($message->{body}->payload);
                         
                         my $report_builder = Poo::ReportBuilder->new();
-                        say "building report";
+                        
+                        my $start = [gettimeofday];
+
                         $report_builder->build_report($params, sub {
                           # because we passed the result via callback,
                           #  we get the result, not condvar
                           my $report_data = shift;
-                          say "built report";
+                          
+                          say "building report " . $params->{name};
                         
                           my $report_json = encode_json($report_data);
                           
                           my %args = (
                             db => $db, # this is blocking
                             report_fields_json => $report_json,
+                            status => 'complete',
                             %{$params},
                           );
                           
                           # update the report
                           my $report = Poo::Report->new(\%args)->save;
+                          say "finished building report " . $params->{name};
+                          say "report took " . tv_interval($start, [gettimeofday]);
                           
                           $channel->ack(delivery_tag => $delivery_tag);
                           

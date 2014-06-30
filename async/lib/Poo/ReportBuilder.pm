@@ -13,6 +13,7 @@ use Try::Tiny;
 use JSON;
 use AnyEvent::HTTP;
 use DBI;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 use Data::Dumper;
 
@@ -102,12 +103,21 @@ sub build_report {
     $pre_report{$row->{customerid}} = $report_row;
   }
   
+  my $http_start = [gettimeofday];
   my $http_data = $self->_get_data_from_urls(\%urls_list); # build url, add args to it and pass
+  say "All HTTP requests took " . tv_interval($http_start, [gettimeofday]);
   
   for my $customerid (keys %pre_report) {
     my $pre_report_row = $pre_report{$customerid};
     
-    my $weather = decode_json($http_data->{$customerid}->{weather});
+    my $weather;
+    try {
+      $weather = decode_json($http_data->{$customerid}->{weather});
+    } catch {
+      say "unable to decode json for weather: " . $!;
+      say Dumper($http_data->{$customerid}->{weather});
+      $weather = {};
+    };
     
     $pre_report_row->{weather_alert} = $weather->{alert};
     $pre_report_row->{weather_description} = $weather->{description};
@@ -175,12 +185,13 @@ sub _get_data_from_urls {
     for my $service_name (keys %{$urls}) {
       $cv->begin;
   
-      my $now = time;
+      my $start = [gettimeofday];
       my $request;
 
       $request = http_request(
         GET => $urls->{$service_name},
-        timeout => 2, # seconds
+        timeout => 10, # seconds
+        recurse => 3, # retry 3 times
         sub {
           my ($body, $hdr) = @_;
         
@@ -191,8 +202,7 @@ sub _get_data_from_urls {
           }
           
           $result->{$customerid}->{$service_name} = $body;
-          say "got url for " . $service_name;
-          #say "time to fetch $service_name url: " . time - $now;
+          say "Request for $customerid $service_name took " . tv_interval($start, [gettimeofday]);
           
           undef $request;
           $cv->end;
