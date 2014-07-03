@@ -20,17 +20,16 @@ This assumes you already have Postgres installed and configured.
   1. Restart PostgreSQL - `sudo /etc/init.d/postgresql restart`
 1. Load the schema in the 'sql' directory: `psql -U poo -d poo -a -f 01_poo.sql`
 
-You now have a database called "poo" with the schema, data, and some initial reports inserted. One thing to note, the images table is created as an empty table. The images I used in my talk were courtesy of Shutterstock and I cannot redistribute them. Feel free to find 50 of your own images and load them into that table as binary data. I've added the script I used to load the images in the support directory.
+You now have a database called "poo" with the schema, data, and some initial reports inserted. One thing to note, the images table is created as an empty table and the initial reports do not have real image data. Due to the increased size of the database, the images are not included in the schema. The images are located in the support folder and can be loaded into the database using a script in the same folder. To run it, use the following command: `perl load_images_into_db.pl shutterstock_images`
+
+Please note that the images are licensed stock images provided courtesy of Shutterstock. The use of these images is solely limited to use with this sample application. The images may not be reused nor redistributed. If you would like to reuse or redistribute these images, feel free to visit shutterstock.com for licensing details.
 
 The test data is provided from the samples on the PG Foundry website: http://pgfoundry.org/projects/dbsamples/ I modified the first names so they would have real names instead of encoded ones, just for demonstration purposes (I thought it might look nicer).
-
-#### Using a different Database Server
-If you don't want to use Postgres, you can change the "dsn" string (just grep the repo). Follow the setup instructions for Postgres but adapt it for your database server of choice as appropriate. Normally I use a config file to load this seperately but for this demo, a hard-coded dsn string was acceptable.
 
 ### Rabbitmq
 I installed rabbitmq-server through apt-get. I also recommend enabling the RabbitMQ administration plugin that lets you manage RMQ through a web browser.
 
-The application just uses the default guest/guest configuration.
+The application just uses the default guest/guest configuration. Make sure you add guest to the '/' vhost.
 
 ## Running the Applications
 TODO

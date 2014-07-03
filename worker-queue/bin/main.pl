@@ -41,11 +41,13 @@ get '/my_reports' => sub {
   # ordered list of columns for display
   my @reports_head = qw(
     name
+    status
     submitted_on
     completed_on
-    status
+    modified_on
     start_date
     end_date
+    total_time
   );
 
   $self->stash(reports_head => \@reports_head);
@@ -98,8 +100,6 @@ post '/post_report_request' => sub {
   # create a new report entry
   my $report = Poo::Report->new(\%args);
   $report->save();
-  
-  my $start = [gettimeofday];
 
   # push a job to the RabbitMQ queue
   my $cv = AnyEvent->condvar;
@@ -133,14 +133,21 @@ post '/post_report_request' => sub {
               routing_key => 'reports',
           );
 
-          my $now = DateTime->now;
-
           $channel->publish(%publish_args);
-          my $queued_report = Poo::Report->new(db => $self->db, name => $params->{name}, status => 'queued');
+
+          my $now = localtime(time);
+
+          my $queued_report = Poo::Report->new(
+            db => $self->db,
+            name => $params->{name},
+            status => 'queued',
+            modified_on => $now
+          );
+
           $queued_report->save();
 
-        # exit once processing is done
-        $cv->send("Added report request to queue");
+          # exit once processing is done
+          $cv->send("Added report request to queue");
         },
         on_failure => sub { $cv->croak("Channel failure: " . Dumper(@_)) },
         on_close   => sub { $cv->croak("Channel closed: " . Dumper(@_)) }
@@ -168,8 +175,6 @@ post '/post_report_request' => sub {
   if ($report_for_display->status ne 'complete') {
     $report_head = 'Report Request Submitted';
   }
-
-  say "request took: " . tv_interval($start,[gettimeofday]);
   
   $self->stash(
                 report_head => $report_head,

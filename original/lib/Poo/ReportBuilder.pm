@@ -88,13 +88,15 @@ sub build_report {
     
     # get data from external services
     my $http_data = $self->_get_data_from_urls();
-    my $weather = decode_json($http_data->{weather});
+    my $weather = $http_data->{weather}->{content};
     
     $report_row->{weather_alert} = $weather->{alert};
     $report_row->{weather_description} = $weather->{description};
     $report_row->{temperature} = $weather->{temperature};
+    $report_row->{weather_url_time} = $http_data->{weather}->{url_fetch_time};
 
-    $report_row->{image} = $http_data->{image};
+    $report_row->{image} = $http_data->{image}->{content};
+    $report_row->{image_url_time} = $http_data->{image}->{url_fetch_time};
     
     # build customer name
     $row->{lastname} =~ m/^(\D{1})/;
@@ -137,7 +139,6 @@ sub _get_data_from_db {
   WHERE orderdate > ? AND orderdate < ?
   GROUP BY location, c.customerid, monthday
   ORDER BY location, c.customerid, monthday
-  LIMIT 10
   |;
   
   my $sth = $self->dbh->prepare($sql);
@@ -169,8 +170,12 @@ sub _get_data_from_urls {
       $content =~ s/\"$//;
     }
     
-    $http_data->{$service_name} = $content;
-    say "url request for $service_name took " . tv_interval($start, [gettimeofday]);
+    if ($service_name eq 'weather') {
+      $http_data->{$service_name}->{content} = decode_json($content);
+    } else {
+      $http_data->{$service_name}->{content} = $content;
+    }
+    $http_data->{$service_name}->{url_fetch_time} = tv_interval($start, [gettimeofday]);
   }
   
   return $http_data;

@@ -54,9 +54,14 @@ sub _build_db_fields {
   my $self = shift;
 
   my @ok_to_update = qw(
-    name
+    start_date
+    end_date
     status
     report_fields_json
+    total_time
+    completed_on
+    start_date
+    end_date
   );
 
   return \@ok_to_update;
@@ -78,10 +83,10 @@ sub _build_db_row {
     $db_row = $self->db->resultset('Report')->search(
       { "me.name" => $self->name }
     )->single;
+  
+    croak "Report " . $self->name . " not found."
+      unless $db_row;
   }
-
-  croak "Report " . $self->name . " not found."
-    unless $db_row;
 
   return $db_row;
 }
@@ -149,13 +154,11 @@ sub _build_status {
   if ($self->create) {
     return 'pending';
   }
-
   $self->unmodified_fields->{status} = 1;
   return $self->db_row->status;
 }
 
 has submitted_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_submitted_on',
@@ -163,11 +166,17 @@ has submitted_on => (
 
 sub _build_submitted_on {
   my $self = shift;
-  return $self->db_row->submitted_on;
+  
+  $self->unmodified_fields->{submitted_on} = 1;
+  
+  unless ($self->create) {
+    return $self->db_row->submitted_on;
+  }
+  
+  return;
 }
 
 has completed_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_completed_on',
@@ -175,12 +184,18 @@ has completed_on => (
 
 sub _build_completed_on {
   my $self = shift;
-  return $self->db_row->completed_on || "";
+  
+  $self->unmodified_fields->{completed_on} = 1;
+
+  unless ($self->create) {
+    return $self->db_row->completed_on;
+  }
+  
+  return;
 }
 
 # specifically to track status updates
 has modified_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_modified_on',
@@ -188,7 +203,30 @@ has modified_on => (
 
 sub _build_modified_on {
   my $self = shift;
-  return $self->db_row->modified_on;
+  $self->unmodified_fields->{modified_on} = 1;
+  unless ($self->create) {
+    return $self->db_row->modified_on;
+  }
+  
+  return;
+}
+
+has total_time => (
+    is => 'ro',
+    required => 1,
+    lazy => 1,
+    builder => '_build_total_time',
+);
+
+sub _build_total_time {
+  my $self = shift;
+  
+  $self->unmodified_fields->{total_time} = 1;
+  unless ($self->create) {
+    return $self->db_row->completed_on;
+  }
+  
+  return;
 }
 
 has report_fields_json => (
@@ -201,7 +239,13 @@ has report_fields_json => (
 sub _build_report_fields_json {
   my $self = shift;
 
-  my $report_fields_json = $self->db_row->report_fields_json || "";
+  my $report_fields_json;
+  if ($self->db_row) {
+    $report_fields_json = $self->db_row->report_fields_json;
+  } else {
+    $report_fields_json = "[]";
+  }
+
   $self->unmodified_fields->{report_fields_json} = 1;
   
   return $report_fields_json;
@@ -248,8 +292,20 @@ sub _build_modified_fields {
 
 sub _update {
   my $self = shift;
+  
+  my %modified_fields;
+  for my $field (@{$self->db_fields}) {
+    $modified_fields{$field} = $self->$field
+      unless $self->unmodified_fields->{$field};
+  }
 
-  $self->db->resultset('Report')->update($self->modified_fields);
+  my $rs = $self->db->resultset('Report')->search(
+    {
+      'me.name' => $self->name
+    }
+  );
+  
+  $rs->update(\%modified_fields);
 
   return;
 }
@@ -259,17 +315,22 @@ sub _insert {
 
   my $db_row;
 
+  my %modified_fields;
+  for my $field (@{$self->db_fields}) {
+    $modified_fields{$field} = $self->$field
+      unless $self->unmodified_fields->{$field};
+  }
+
   my %insert = (
     name => $self->name,
-    %{$self->modified_fields}
+    %modified_fields
   );
 
     try {
       $db_row = $self->db->resultset('Report')->new(\%insert);
       $db_row->insert;
     } catch {
-      croak "Creating new Report failed: " . $_
-        unless $db_row->in_storage();
+      croak "Creating new Report failed: " . $_;
     };
 
     return;

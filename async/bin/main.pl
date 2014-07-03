@@ -42,8 +42,9 @@ get '/my_reports' => sub {
     submitted_on
     completed_on
     status
-    start
-    end
+    start_date
+    end_date
+    total_time
   );
 
   $self->stash(reports_head => \@reports_head);
@@ -84,25 +85,30 @@ get '/report_request' => sub {
 
 post '/post_report_request' => sub {
   my $self = shift;
-  
-  my $start = [gettimeofday];
+
   my $params = dclone($self->req->body_params->to_hash);
   my $report_builder = Poo::ReportBuilder->new();
+  
+  my $start = [gettimeofday];
   my $report_data = $report_builder->build_report($params);
+  my $report_time = tv_interval($start, [gettimeofday]);
 
   my $report_json = encode_json($report_data);
+  my $completed_on = localtime(time);
   
   my %args = (
     db => $self->db,
     create => 1,
     report_fields_json => $report_json,
+    status => 'complete',
+    total_time => $report_time,
+    completed_on => $completed_on,
     %{$params},
   );
 
   # create a new report instance with the results
-  my $report = Poo::Report->new(\%args)->save;
-  
-  say "report took: " . tv_interval($start, [gettimeofday]);
+  my $report = Poo::Report->new(\%args);
+  $report->save;
 
   $self->stash(
                report => $report_data,

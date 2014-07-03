@@ -58,6 +58,10 @@ sub _build_db_fields {
     end_date
     status
     report_fields_json
+    total_time
+    completed_on
+    start_date
+    end_date
   );
 
   return \@ok_to_update;
@@ -155,7 +159,6 @@ sub _build_status {
 }
 
 has submitted_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_submitted_on',
@@ -170,11 +173,10 @@ sub _build_submitted_on {
     return $self->db_row->submitted_on;
   }
   
-  return "";
+  return;
 }
 
 has completed_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_completed_on',
@@ -186,15 +188,14 @@ sub _build_completed_on {
   $self->unmodified_fields->{completed_on} = 1;
 
   unless ($self->create) {
-    return $self->db_row->completed_on
+    return $self->db_row->completed_on;
   }
   
-  return "";
+  return;
 }
 
 # specifically to track status updates
 has modified_on => (
-  isa => 'Str',
   is => 'ro',
   lazy => 1,
   builder => '_build_modified_on',
@@ -207,7 +208,25 @@ sub _build_modified_on {
     return $self->db_row->modified_on;
   }
   
-  return "";
+  return;
+}
+
+has total_time => (
+    is => 'ro',
+    required => 1,
+    lazy => 1,
+    builder => '_build_total_time',
+);
+
+sub _build_total_time {
+  my $self = shift;
+  
+  $self->unmodified_fields->{total_time} = 1;
+  unless ($self->create) {
+    return $self->db_row->completed_on;
+  }
+  
+  return;
 }
 
 has report_fields_json => (
@@ -311,8 +330,7 @@ sub _insert {
       $db_row = $self->db->resultset('Report')->new(\%insert);
       $db_row->insert;
     } catch {
-      croak "Creating new Report failed: " . $_
-        unless $db_row->in_storage();
+      croak "Creating new Report failed: " . $_;
     };
 
     return;

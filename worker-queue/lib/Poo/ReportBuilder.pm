@@ -47,12 +47,14 @@ sub _build_urls {
   };
 }
 
+# TODO you could use these to order the columns
 has columns => (
   isa => 'ArrayRef',
   is => 'ro',
   lazy => 1,
   builder => '_build_columns',
 );
+
 sub _build_columns {
   return [qw(
       customer
@@ -111,15 +113,17 @@ sub build_report {
     for my $customerid (keys %pre_report) {
       my $pre_report_row = $pre_report{$customerid};
 
-      next unless $http_data->{$customerid}->{weather};
+      next unless $http_data->{$customerid}->{weather}->{content};
 
-      my $weather = decode_json($http_data->{$customerid}->{weather});
+      my $weather = $http_data->{$customerid}->{weather}->{content};
 
       $pre_report_row->{weather_alert} = $weather->{alert};
       $pre_report_row->{weather_description} = $weather->{description};
       $pre_report_row->{temperature} = $weather->{temperature};
+      $pre_report_row->{weather_url_fetch_time} = $http_data->{$customerid}->{weather}->{url_fetch_time};
 
-      $pre_report_row->{image} = $http_data->{$customerid}->{image};
+      $pre_report_row->{image} = $http_data->{$customerid}->{image}->{content};
+      $pre_report_row->{image_url_fetch_time} = $http_data->{$customerid}->{image}->{url_fetch_time};
 
       push @{$report}, $pre_report_row;
     }
@@ -192,7 +196,11 @@ sub _get_data_from_urls {
           
           # if we have an error
           if ($hdr->{Reason} ne 'OK') {
-            croak "unable to retrieve data for $service_name: " . $hdr->{Reason};
+            $result->{$customerid}->{$service_name}->{error} = "unable to retrieve data for $service_name: " . $hdr->{Reason};
+            $result->{$customerid}->{$service_name}->{content} = "";
+            $result->{$customerid}->{$service_name}->{url_fetch_time} = tv_interval($start, [gettimeofday]);
+            
+            say "unable to retrieve data for $service_name: " . $hdr->{Reason};
           }
           
 
@@ -202,8 +210,19 @@ sub _get_data_from_urls {
             $body =~ s/\"$//;
           }
 
-          $result->{$customerid}->{$service_name} = $body;
-          say "url request for $customerid $service_name took " . tv_interval($start, [gettimeofday]);
+          if ($service_name eq 'weather') {
+            try {
+              $result->{$customerid}->{$service_name}->{content} = decode_json($body);
+            } catch {
+              say "unable to decode json for weather: " . $!;
+              say Dumper($body);
+              $result->{$customerid}->{$service_name}->{content} = {};
+            };
+          } else {
+            $result->{$customerid}->{$service_name}->{content} = $body;
+          }
+          
+          $result->{$customerid}->{$service_name}->{url_fetch_time} = tv_interval($start, [gettimeofday]);
 
           undef $request;
           $cv->end;

@@ -34,7 +34,7 @@ get '/' => sub {
 get '/my_reports' => sub {
   my $self = shift;
   
-    my $reports = $self->db->resultset('Report')->search(undef, {order_by => 'submitted_on'})->hashref_pk;
+  my $reports = $self->db->resultset('Report')->search(undef, {order_by => 'submitted_on'})->hashref_pk;
 
   # ordered list of columns for display
   my @reports_head = qw(
@@ -42,8 +42,9 @@ get '/my_reports' => sub {
     submitted_on
     completed_on
     status
-    start
-    end
+    start_date
+    end_date
+    total_time
   );
 
   $self->stash(reports_head => \@reports_head);
@@ -84,28 +85,30 @@ get '/report_request' => sub {
 
 post '/post_report_request' => sub {
   my $self = shift;
-  
-  my $start = [gettimeofday];
 
   my $params = dclone($self->req->body_params->to_hash);
   my $report_builder = Poo::ReportBuilder->new();
+
+  my $start = [gettimeofday];
   my $report_data = $report_builder->build_report($params);
+  my $report_time = tv_interval($start, [gettimeofday]);
 
   my $report_json = encode_json($report_data);
+  my $completed_on = localtime(time);
   
   my %args = (
     db => $self->db,
     create => 1,
     report_fields_json => $report_json,
     status => 'complete',
+    total_time => $report_time,
+    completed_on => $completed_on,
     %{$params},
   );
 
   # create a new report instance with the results
   my $report = Poo::Report->new(\%args);
   $report->save;
-  
-  say "report took: " . tv_interval($start, [gettimeofday]);
   
   $self->stash(
                report => $report_data,
@@ -182,7 +185,6 @@ My Reports: <br />
 %= t h1 => 'New Report'
 <table border=1>
 %= form_for '/post_report_request' => (method => 'post') => begin
-%= hidden_field request_id => $self->param('id');
 <tr><td>Start Date: </td><td><%= text_field 'start_date' %></td></tr>
 <tr><td>End Date: </td><td><%= text_field 'end_date' %></td></tr>
 <tr><td>Name (optional): </td><td><%= text_field 'name' %></td></tr>
