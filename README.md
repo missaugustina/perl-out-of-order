@@ -32,4 +32,8 @@ I installed rabbitmq-server through apt-get. I also recommend enabling the Rabbi
 The application just uses the default guest/guest configuration. Make sure you add guest to the '/' vhost.
 
 ## Running the Applications
-TODO
+Run the main.pl files in the bin directory in each version of the application. See Mojolicious docs for the different ways to run Mojolicious apps. For the http services, run support/http_services.pl. Make sure you run this on a different port than the main.pl applications.
+
+original - the original version of the application with no improvements.
+async - the version with asyncronous HTTP requests added.
+workerqueue - the version with worker-queue support added. To run this, you'll also need to run the worker script, also located in the bin directory.
